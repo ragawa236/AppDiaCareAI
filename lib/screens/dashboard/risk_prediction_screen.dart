@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/privacy_provider.dart';
+import '../../repositories/database_repository.dart';
 import 'explainable_ai_screen.dart';
 
 class RiskPredictionScreen extends StatefulWidget {
@@ -199,14 +203,54 @@ class _RiskPredictionScreenState extends State<RiskPredictionScreen> {
           _computedRiskLevel = level;
           _computedRiskColor = levelColor;
         });
+
+        // Save prediction history if storeHistory is enabled
+        _savePredictionToHistory(
+          riskPercentage: riskPercentage,
+          metabolicScore: metScore,
+          riskLevel: level,
+        );
       });
+    }
+  }
+
+  Future<void> _savePredictionToHistory({
+    required double riskPercentage,
+    required double metabolicScore,
+    required String riskLevel,
+  }) async {
+    if (!mounted) return;
+    final privacyProvider = context.read<PrivacyProvider>();
+    final storeHistory = privacyProvider.settings?.storeHistory ?? true;
+    if (!storeHistory) return;
+
+    final uid = context.read<AuthProvider>().firebaseUser?.uid;
+    if (uid == null) return;
+
+    final data = {
+      'riskPercentage': riskPercentage,
+      'metabolicScore': metabolicScore,
+      'riskLevel': riskLevel,
+      'timestamp': DateTime.now().toIso8601String(),
+      'age': double.tryParse(_ageController.text) ?? 0.0,
+      'bmi': double.tryParse(_bmiController.text) ?? 0.0,
+      'hba1c': double.tryParse(_hba1cController.text) ?? 0.0,
+      'glucose': double.tryParse(_glucoseController.text) ?? 0.0,
+      'gender': _gender ?? '',
+      'hypertension': _hypertension == 'Ya',
+      'heartDisease': _heartDisease == 'Ya',
+      'smokingHistory': _smokingHistory ?? '',
+    };
+
+    try {
+      await DatabaseRepository().saveRiskPrediction(uid, data);
+    } catch (e) {
+      debugPrint('RiskPrediction: Failed to save history: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(

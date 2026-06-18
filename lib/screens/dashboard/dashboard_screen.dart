@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/health_provider.dart';
+import '../../providers/privacy_provider.dart';
+import '../../repositories/database_repository.dart';
 import '../history/history_screen.dart';
 import '../profile/profile_screen.dart';
 import 'risk_prediction_screen.dart';
@@ -131,7 +133,9 @@ class _HomeContentState extends State<_HomeContent>
   int _notificationCount = 3;
   
   final FirebaseSensorService _sensorService = FirebaseSensorService();
+  final DatabaseRepository _dbRepository = DatabaseRepository();
   bool _isSimulating = false;
+  DateTime? _lastSensorSave;
 
   @override
   void initState() {
@@ -152,6 +156,35 @@ class _HomeContentState extends State<_HomeContent>
     _sensorService.stopSimulation();
     _animController.dispose();
     super.dispose();
+  }
+
+  /// Throttle sensor data saves to once every 5 minutes to avoid RTDB write spam.
+  Future<void> _maybeSaveSensorData(SensorData data) async {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (_lastSensorSave != null &&
+        now.difference(_lastSensorSave!) < const Duration(minutes: 5)) return;
+    _lastSensorSave = now;
+
+    final privacyProvider = context.read<PrivacyProvider>();
+    final storeHistory = privacyProvider.settings?.storeHistory ?? true;
+    if (!storeHistory) return;
+
+    final uid = context.read<AuthProvider>().firebaseUser?.uid;
+    if (uid == null) return;
+
+    try {
+      await _dbRepository.saveSensorDataHistory(uid, {
+        'temperature': data.temperature,
+        'humidity': data.humidity,
+        'glucose': data.glucose,
+        'timestamp': data.timestamp.isNotEmpty
+            ? data.timestamp
+            : DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Dashboard: Failed to save sensor history: $e');
+    }
   }
 
   void _showNotificationBottomSheet() {
@@ -557,6 +590,11 @@ class _HomeContentState extends State<_HomeContent>
                     }
                     
                     final sensorData = snapshot.data ?? SensorData.initial();
+
+                    // Throttled save of sensor history to RTDB (respects privacy settings)
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _maybeSaveSensorData(sensorData);
+                    });
                     
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

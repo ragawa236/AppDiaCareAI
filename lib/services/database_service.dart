@@ -164,4 +164,124 @@ class DatabaseService {
       return list;
     });
   }
+
+  // ================= SENSOR DATA & RISK PREDICTION HISTORY =================
+
+  /// Save a risk prediction to users/$uid/risk_predictions.
+  Future<void> saveRiskPrediction(String uid, Map<String, dynamic> data) async {
+    try {
+      final ref = _db.ref('$_usersNode/$uid/risk_predictions').push();
+      final dataWithId = Map<String, dynamic>.from(data)..['predictionId'] = ref.key;
+      await ref.set(dataWithId);
+      debugPrint('DatabaseService: Risk prediction saved for UID: $uid');
+    } catch (e) {
+      debugPrint('DatabaseService: saveRiskPrediction error: $e');
+      throw Exception('Gagal menyimpan hasil prediksi risiko.');
+    }
+  }
+
+  /// Get a stream of risk predictions count for UID.
+  Stream<int> getRiskPredictionsCountStream(String uid) {
+    return _db.ref('$_usersNode/$uid/risk_predictions').onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists || snapshot.value == null) return 0;
+      final Map<dynamic, dynamic> dataMap = snapshot.value as Map<dynamic, dynamic>;
+      return dataMap.length;
+    });
+  }
+
+  /// Save sensor data history to users/$uid/sensor_data.
+  Future<void> saveSensorDataHistory(String uid, Map<String, dynamic> data) async {
+    try {
+      final ref = _db.ref('$_usersNode/$uid/sensor_data').push();
+      await ref.set(data);
+      debugPrint('DatabaseService: Sensor data history saved for UID: $uid');
+    } catch (e) {
+      debugPrint('DatabaseService: saveSensorDataHistory error: $e');
+      // Non-fatal, do not block app execution
+    }
+  }
+
+  /// Get a stream of sensor data history count for UID.
+  Stream<int> getSensorDataCountStream(String uid) {
+    return _db.ref('$_usersNode/$uid/sensor_data').onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists || snapshot.value == null) return 0;
+      final Map<dynamic, dynamic> dataMap = snapshot.value as Map<dynamic, dynamic>;
+      return dataMap.length;
+    });
+  }
+
+  /// Clear user's history nodes (sensor_data, risk_predictions, activity_logs).
+  Future<void> clearUserHistory(String uid) async {
+    try {
+      await _db.ref('$_usersNode/$uid/sensor_data').remove();
+      await _db.ref('$_usersNode/$uid/risk_predictions').remove();
+      await _db.ref('$_usersNode/$uid/$_logsNode').remove();
+      debugPrint('DatabaseService: Cleared history nodes for UID: $uid');
+    } catch (e) {
+      debugPrint('DatabaseService: clearUserHistory error: $e');
+      throw Exception('Gagal menghapus riwayat.');
+    }
+  }
+
+  /// Export user profile and history nodes.
+  Future<Map<String, dynamic>> exportUserData(String uid) async {
+    try {
+      final profileSnap = await _db.ref('$_usersNode/$uid').get();
+      final Map<dynamic, dynamic>? profileVal = profileSnap.value as Map<dynamic, dynamic>?;
+      final Map<String, dynamic> profile = profileVal != null 
+          ? profileVal.map((key, val) => MapEntry(key.toString(), val))
+          : {};
+          
+      // Exclude sub-collections from profile map to prevent duplicates
+      profile.remove('health_history');
+      profile.remove('activity_logs');
+      profile.remove('sensor_data');
+      profile.remove('risk_predictions');
+
+      final sensorSnap = await _db.ref('$_usersNode/$uid/sensor_data').get();
+      final Map<dynamic, dynamic>? sensorVal = sensorSnap.value as Map<dynamic, dynamic>?;
+      final List<Map<String, dynamic>> sensorDataList = [];
+      if (sensorVal != null) {
+        sensorVal.forEach((key, val) {
+          if (val is Map) {
+            sensorDataList.add(val.map((k, v) => MapEntry(k.toString(), v)));
+          }
+        });
+      }
+
+      final predictionSnap = await _db.ref('$_usersNode/$uid/risk_predictions').get();
+      final Map<dynamic, dynamic>? predictionVal = predictionSnap.value as Map<dynamic, dynamic>?;
+      final List<Map<String, dynamic>> riskPredictionsList = [];
+      if (predictionVal != null) {
+        predictionVal.forEach((key, val) {
+          if (val is Map) {
+            riskPredictionsList.add(val.map((k, v) => MapEntry(k.toString(), v)));
+          }
+        });
+      }
+
+      final logsSnap = await _db.ref('$_usersNode/$uid/$_logsNode').get();
+      final Map<dynamic, dynamic>? logsVal = logsSnap.value as Map<dynamic, dynamic>?;
+      final List<Map<String, dynamic>> activityLogsList = [];
+      if (logsVal != null) {
+        logsVal.forEach((key, val) {
+          if (val is Map) {
+            activityLogsList.add(val.map((k, v) => MapEntry(k.toString(), v)));
+          }
+        });
+      }
+
+      return {
+        'profile': profile,
+        'sensor_data': sensorDataList,
+        'risk_predictions': riskPredictionsList,
+        'activity_logs': activityLogsList,
+      };
+    } catch (e) {
+      debugPrint('DatabaseService: exportUserData error: $e');
+      throw Exception('Gagal mengunduh data pengguna.');
+    }
+  }
 }

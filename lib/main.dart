@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/health_provider.dart';
+import 'providers/notification_provider.dart';
+import 'providers/privacy_provider.dart';
+import 'providers/support_provider.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/auth/verify_email_screen.dart';
@@ -33,6 +36,9 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => HealthProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => PrivacyProvider()),
+        ChangeNotifierProvider(create: (_) => SupportProvider()),
       ],
       child: const DiaCareApp(),
     ),
@@ -63,9 +69,11 @@ class AuthWrapper extends StatelessWidget {
     if (authProvider.isAuthenticated) {
       if (authProvider.firebaseUser!.emailVerified) {
         final uid = authProvider.firebaseUser!.uid;
-        // Initialize database stream inside post frame callback to avoid build phase updates
+        // Initialize all provider streams inside post frame callback
         WidgetsBinding.instance.addPostFrameCallback((_) {
           context.read<HealthProvider>().initialize(uid);
+          context.read<NotificationProvider>().initialize(uid);
+          context.read<PrivacyProvider>().initialize(uid);
         });
         return const DashboardScreen();
       } else {

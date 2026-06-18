@@ -9,6 +9,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/health_provider.dart';
 import '../../models/user_model.dart';
 import '../history/report_preview_screen.dart';
+import 'notification_settings_screen.dart';
+import 'privacy_data_screen.dart';
+import 'help_support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -642,14 +645,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'Notifikasi',
                     subtitle: 'Kelola peringatan kesehatan',
                     color: AppTheme.primaryBlue, // Blue
-                    onTap: () {},
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationSettingsScreen(),
+                      ),
+                    ),
                   ),
                   _SettingsItem(
                     icon: Icons.privacy_tip_outlined,
                     title: 'Privasi & Data',
                     subtitle: 'Kontrol pembagian data Anda',
                     color: const Color(0xFFEF4444), // Red
-                    onTap: () {},
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyDataScreen(),
+                      ),
+                    ),
                   ),
                   _SettingsItem(
                     icon: Icons.medical_services_outlined,
@@ -663,7 +676,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'Bantuan & Dukungan',
                     subtitle: 'Dapatkan bantuan asisten',
                     color: const Color(0xFFEF4444), // Red
-                    onTap: () {},
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HelpSupportScreen(),
+                      ),
+                    ),
                   ),
                 ]),
                 const SizedBox(height: 20),

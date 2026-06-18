@@ -80,4 +80,30 @@ class DatabaseRepository {
   Stream<List<ActivityLog>> getActivityLogsStream(String uid) {
     return _dbService.getActivityLogsStream(uid);
   }
+
+  // ================= SENSOR DATA & PREDICTIONS HISTORY =================
+
+  Future<void> saveRiskPrediction(String uid, Map<String, dynamic> data) async {
+    await _dbService.saveRiskPrediction(uid, data);
+  }
+
+  Stream<int> getRiskPredictionsCountStream(String uid) {
+    return _dbService.getRiskPredictionsCountStream(uid);
+  }
+
+  Future<void> saveSensorDataHistory(String uid, Map<String, dynamic> data) async {
+    await _dbService.saveSensorDataHistory(uid, data);
+  }
+
+  Stream<int> getSensorDataCountStream(String uid) {
+    return _dbService.getSensorDataCountStream(uid);
+  }
+
+  Future<void> clearUserHistory(String uid) async {
+    await _dbService.clearUserHistory(uid);
+  }
+
+  Future<Map<String, dynamic>> exportUserData(String uid) async {
+    return await _dbService.exportUserData(uid);
+  }
 }
