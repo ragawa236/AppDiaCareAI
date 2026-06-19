@@ -439,7 +439,7 @@ class PrivacyDataScreen extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppTheme.primaryBlue,
+            activeThumbColor: AppTheme.primaryBlue,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ],

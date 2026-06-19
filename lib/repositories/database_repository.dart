@@ -1,6 +1,7 @@
 import '../models/user_model.dart';
 import '../models/health_record.dart';
 import '../models/activity_log.dart';
+import '../models/risk_prediction.dart';
 import '../services/database_service.dart';
 import '../utils/device_helper.dart';
 
@@ -18,6 +19,16 @@ class DatabaseRepository {
   /// Updates user profile details.
   Future<void> updateUserProfile(String uid, Map<String, dynamic> data) async {
     await _dbService.updateUserProfile(uid, data);
+  }
+
+  /// Saves the FCM registration token for the user's device.
+  Future<void> saveFcmToken(String uid, String token) async {
+    await _dbService.saveFcmToken(uid, token);
+  }
+
+  /// Updates the profile photo URL in the user's RTDB node.
+  Future<void> updatePhotoUrl(String uid, String photoUrl) async {
+    await _dbService.updatePhotoUrl(uid, photoUrl);
   }
 
   // ================= HEALTH RECORDS CRUD =================
@@ -90,6 +101,11 @@ class DatabaseRepository {
   Stream<int> getRiskPredictionsCountStream(String uid) {
     return _dbService.getRiskPredictionsCountStream(uid);
   }
+
+  Stream<List<RiskPredictionModel>> getRiskPredictionsStream(String uid) {
+    return _dbService.getRiskPredictionsStream(uid);
+  }
+
 
   Future<void> saveSensorDataHistory(String uid, Map<String, dynamic> data) async {
     await _dbService.saveSensorDataHistory(uid, data);

@@ -22,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   XFile? _pickedImage;
+  double _uploadProgress = 0.0;
   final ImagePicker _picker = ImagePicker();
 
   void _showEditProfileSheet(UserModel profile) {
@@ -101,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(color: Colors.white, width: 4),
-                                  gradient: tempPickedImage == null
+                                  gradient: (tempPickedImage == null && profile.photoUrl.isEmpty)
                                       ? const LinearGradient(
                                           colors: [AppTheme.primaryBlue, Color(0xFFEF4444)],
                                         )
@@ -113,7 +114,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               : FileImage(File(tempPickedImage!.path)) as ImageProvider,
                                           fit: BoxFit.cover,
                                         )
-                                      : null,
+                                      : profile.photoUrl.isNotEmpty
+                                          ? DecorationImage(
+                                              image: NetworkImage(profile.photoUrl),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
                                   boxShadow: [
                                     BoxShadow(
                                       color: AppTheme.primaryBlue.withOpacity(0.12),
@@ -122,10 +128,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ],
                                 ),
-                                child: tempPickedImage == null
+                                child: (tempPickedImage == null && profile.photoUrl.isEmpty)
                                     ? Center(
                                         child: Text(
-                                          nameController.text.isNotEmpty ? nameController.text[0].toUpperCase() : 'A',
+                                          nameController.text.isNotEmpty
+                                              ? nameController.text[0].toUpperCase()
+                                              : 'A',
                                           style: GoogleFonts.inter(
                                             fontSize: 42,
                                             fontWeight: FontWeight.w800,
@@ -224,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: selectedGender,
+                    initialValue: selectedGender,
                     items: ['Laki-laki', 'Perempuan'].map((g) {
                       return DropdownMenuItem<String>(
                         value: g,
@@ -300,38 +308,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () async {
-                            final newName = nameController.text.trim();
-                            final newAgeStr = ageController.text.trim();
-                            final newAge = int.tryParse(newAgeStr) ?? profile.age;
+                           onPressed: () async {
+                             final newName = nameController.text.trim();
+                             final newAgeStr = ageController.text.trim();
+                             final newAge = int.tryParse(newAgeStr) ?? profile.age;
 
-                            if (newName.isNotEmpty && newAge > 0) {
-                              final success = await context.read<AuthProvider>().updateProfile(
-                                    fullName: newName,
-                                    age: newAge,
-                                    gender: selectedGender,
-                                  );
-                              if (success) {
-                                setState(() {
-                                  _pickedImage = tempPickedImage;
-                                });
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                }
-                              } else {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        context.read<AuthProvider>().errorMessage ?? 'Gagal memperbarui profil.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            }
-                          },
+                             if (newName.isNotEmpty && newAge > 0) {
+                               final authProv = context.read<AuthProvider>();
+
+                               // Upload photo first (if a new one was picked)
+                               if (tempPickedImage != null &&
+                                   tempPickedImage!.path != _pickedImage?.path) {
+                                 if (context.mounted) Navigator.pop(context);
+                                 final url = await authProv.uploadAndSavePhoto(
+                                   tempPickedImage!,
+                                   onProgress: (p) {
+                                     if (mounted) setState(() => _uploadProgress = p);
+                                   },
+                                 );
+                                 if (mounted) {
+                                   setState(() {
+                                   _pickedImage = url != null ? tempPickedImage : _pickedImage;
+                                   _uploadProgress = 0.0;
+                                 });
+                                 }
+                                 if (url == null && context.mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                     SnackBar(
+                                       content: Text(
+                                         authProv.errorMessage ?? 'Gagal mengunggah foto.',
+                                         style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                       ),
+                                       backgroundColor: const Color(0xFFEF4444),
+                                       behavior: SnackBarBehavior.floating,
+                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                     ),
+                                   );
+                                 }
+                               } else {
+                                 if (context.mounted) Navigator.pop(context);
+                               }
+
+                               // Update text profile fields
+                               final success = await authProv.updateProfile(
+                                 fullName: newName,
+                                 age: newAge,
+                                 gender: selectedGender,
+                               );
+                               if (!success && context.mounted) {
+                                 ScaffoldMessenger.of(context).showSnackBar(
+                                   SnackBar(
+                                     content: Text(
+                                       authProv.errorMessage ?? 'Gagal memperbarui profil.',
+                                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                     ),
+                                     backgroundColor: const Color(0xFFEF4444),
+                                     behavior: SnackBarBehavior.floating,
+                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                   ),
+                                 );
+                               }
+                             }
+                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryBlue,
                             foregroundColor: Colors.white,
@@ -370,6 +408,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String name = profile.fullName.isNotEmpty ? profile.fullName : 'Pengguna DiaCare';
     final String email = profile.email.isNotEmpty ? profile.email : 'Belum diatur';
     final String initialLetter = name.isNotEmpty ? name[0].toUpperCase() : 'P';
+
+    // Resolve avatar: local picked file (immediate preview) → cloud URL → initials
+    final String? cloudPhotoUrl =
+        profile.photoUrl.isNotEmpty ? profile.photoUrl : null;
+    final bool hasLocalPreview = _pickedImage != null;
+    final bool hasCloudPhoto = cloudPhotoUrl != null;
+    ImageProvider? avatarImage;
+    if (hasLocalPreview) {
+      avatarImage = kIsWeb
+          ? NetworkImage(_pickedImage!.path)
+          : FileImage(File(_pickedImage!.path)) as ImageProvider;
+    } else if (hasCloudPhoto) {
+      avatarImage = NetworkImage(cloudPhotoUrl);
+    }
     
     final latestRecord = healthProvider.latestRecord;
     final averageGlucose = healthProvider.averageGlucose;
@@ -427,7 +479,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       // Editable Avatar Stack (directly picks from gallery on tap)
                       GestureDetector(
-                        onTap: () => _showEditProfileSheet(profile),
+                        onTap: authProvider.isUploadingPhoto
+                            ? null
+                            : () => _showEditProfileSheet(profile),
                         child: Stack(
                           alignment: Alignment.bottomRight,
                           children: [
@@ -437,16 +491,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 4),
-                                gradient: _pickedImage == null
+                                gradient: avatarImage == null
                                     ? const LinearGradient(
-                                        colors: [AppTheme.primaryBlue, Color(0xFFEF4444)], // Blue to Red Gradient fallback
+                                        colors: [AppTheme.primaryBlue, Color(0xFFEF4444)],
                                       )
                                     : null,
-                                image: _pickedImage != null
+                                image: avatarImage != null
                                     ? DecorationImage(
-                                        image: kIsWeb
-                                            ? NetworkImage(_pickedImage!.path)
-                                            : FileImage(File(_pickedImage!.path)) as ImageProvider,
+                                        image: avatarImage,
                                         fit: BoxFit.cover,
                                       )
                                     : null,
@@ -458,7 +510,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ],
                               ),
-                              child: _pickedImage == null
+                              child: avatarImage == null
                                   ? Center(
                                       child: Text(
                                         initialLetter,
@@ -469,16 +521,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         ),
                                       ),
                                     )
-                                  : null,
+                                  : authProvider.isUploadingPhoto
+                                      ? Container(
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.black26,
+                                          ),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 36,
+                                                  height: 36,
+                                                  child: CircularProgressIndicator(
+                                                    value: _uploadProgress > 0
+                                                        ? _uploadProgress
+                                                        : null,
+                                                    color: Colors.white,
+                                                    strokeWidth: 3,
+                                                  ),
+                                                ),
+                                                if (_uploadProgress > 0) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '${(_uploadProgress * 100).toInt()}%',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      : null,
                             ),
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: const BoxDecoration(
-                                color: Color(0xFFEF4444), // Red Badge
+                                color: Color(0xFFEF4444),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
-                                Icons.camera_alt_rounded, // Camera badge indicator
+                                Icons.camera_alt_rounded,
                                 color: Colors.white,
                                 size: 16,
                               ),
@@ -629,12 +717,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             averageSteps: '8,100',
                             warningCount: warningCountVal,
                             pickedImage: _pickedImage,
-                            historyEntries: healthProvider.records.map((r) => {
-                              'title': 'Gula Darah: ${r.glucoseLevel.toInt()} mg/dL (${r.bmiStatus})',
-                              'time': r.timestamp.isNotEmpty ? r.timestamp.substring(0, 10) : 'Baru saja',
-                              'value': '${r.glucoseLevel.toInt()} mg/dL',
-                              'status': r.glucoseStatus,
-                            }).toList(),
+                            historyEntries: [
+                              ...healthProvider.records.map((r) => {
+                                'title': 'Gula Darah: ${r.glucoseLevel.toInt()} mg/dL (${r.bmiStatus})',
+                                'time': r.timestamp.isNotEmpty ? r.timestamp.substring(0, 10) : 'Baru saja',
+                                'value': '${r.glucoseLevel.toInt()} mg/dL',
+                                'status': r.glucoseStatus,
+                              }),
+                              ...healthProvider.predictions.map((p) => {
+                                'title': 'Analisis Risiko Diabetes AI (${p.riskLevel})',
+                                'time': p.timestamp.isNotEmpty ? p.timestamp.substring(0, 10) : 'Baru saja',
+                                'value': 'Risiko: ${p.riskPercentage.toStringAsFixed(0)}%',
+                                'status': p.riskLevel,
+                              }),
+                            ],
                           ),
                         ),
                       );

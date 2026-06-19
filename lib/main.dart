@@ -8,9 +8,11 @@ import 'providers/health_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/privacy_provider.dart';
 import 'providers/support_provider.dart';
+import 'repositories/database_repository.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/auth/verify_email_screen.dart';
+import 'services/fcm_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -20,6 +22,9 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Initialize FCM after Firebase is ready
+    await FcmService.instance.initialize();
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
   }
@@ -70,10 +75,24 @@ class AuthWrapper extends StatelessWidget {
       if (authProvider.firebaseUser!.emailVerified) {
         final uid = authProvider.firebaseUser!.uid;
         // Initialize all provider streams inside post frame callback
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           context.read<HealthProvider>().initialize(uid);
           context.read<NotificationProvider>().initialize(uid);
           context.read<PrivacyProvider>().initialize(uid);
+
+          // Save initial FCM token on startup
+          final token = await FcmService.instance.getToken();
+          if (token != null) {
+            await DatabaseRepository().saveFcmToken(uid, token);
+            debugPrint('AuthWrapper: Initial FCM token saved for $uid');
+          }
+
+          // Keep FCM token up-to-date when Firebase rotates the device token
+          FcmService.instance.onTokenRefresh((newToken) {
+            final dbRepo = DatabaseRepository();
+            dbRepo.saveFcmToken(uid, newToken);
+            debugPrint('AuthWrapper: FCM token rotated & saved for $uid');
+          });
         });
         return const DashboardScreen();
       } else {

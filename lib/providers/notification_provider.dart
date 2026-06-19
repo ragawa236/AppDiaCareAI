@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/notification_settings.dart';
 import '../repositories/notification_repository.dart';
+import '../services/fcm_service.dart';
 
 class NotificationProvider extends ChangeNotifier {
   final NotificationRepository _repository;
@@ -26,13 +27,15 @@ class NotificationProvider extends ChangeNotifier {
     _setLoading(true);
 
     _settingsSubscription?.cancel();
-    _settingsSubscription = _repository.getNotificationSettingsStream(uid).listen((data) {
+    _settingsSubscription = _repository.getNotificationSettingsStream(uid).listen((data) async {
       if (data == null) {
         // Create default settings if none exist
         _settings = NotificationSettingsModel.defaultSettings();
-        saveSettings(_settings!);
+        await saveSettings(_settings!);
       } else {
         _settings = data;
+        // Sync local scheduled notifications
+        await FcmService.instance.updateScheduledNotifications(_settings!);
       }
       _setLoading(false);
       notifyListeners();
@@ -63,6 +66,18 @@ class NotificationProvider extends ChangeNotifier {
         _activeUid!, 
         newSettings.copyWith(updatedAt: DateTime.now()),
       );
+
+      // Sync FCM topic subscriptions to match the new preferences.
+      await FcmService.instance.syncTopics(
+        dailyReminder: newSettings.dailyReminder,
+        medicineReminder: newSettings.medicineReminder,
+        glucoseReminder: newSettings.glucoseReminder,
+        riskPrediction: newSettings.riskPredictionNotification,
+      );
+
+      // Sync local scheduled notifications
+      await FcmService.instance.updateScheduledNotifications(newSettings);
+
       return true;
     } catch (e) {
       _errorMessage = e.toString();

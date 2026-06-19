@@ -167,8 +167,11 @@ class _ExplainableAiScreenState extends State<ExplainableAiScreen> {
     double sumNegative = 0;
     for (var f in rawFeatures) {
       double w = f['rawWeight'] as double;
-      if (w > 0) sumPositive += w;
-      else sumNegative += w.abs();
+      if (w > 0) {
+        sumPositive += w;
+      } else {
+        sumNegative += w.abs();
+      }
     }
 
     double targetDiff = widget.risk - baseValue;

@@ -163,7 +163,9 @@ class _HomeContentState extends State<_HomeContent>
     if (!mounted) return;
     final now = DateTime.now();
     if (_lastSensorSave != null &&
-        now.difference(_lastSensorSave!) < const Duration(minutes: 5)) return;
+        now.difference(_lastSensorSave!) < const Duration(minutes: 5)) {
+      return;
+    }
     _lastSensorSave = now;
 
     final privacyProvider = context.read<PrivacyProvider>();

@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/health_record.dart';
 import '../models/activity_log.dart';
+import '../models/risk_prediction.dart';
+
 
 class DatabaseService {
   final FirebaseDatabase _db = FirebaseDatabase.instance;
@@ -20,6 +22,28 @@ class DatabaseService {
     } catch (e) {
       debugPrint('DatabaseService: createUserProfile error: $e');
       throw Exception('Gagal menyimpan profil pengguna.');
+    }
+  }
+
+  /// Saves the FCM registration token for the given user.
+  Future<void> saveFcmToken(String uid, String token) async {
+    try {
+      await _db.ref('$_usersNode/$uid').update({'fcmToken': token});
+      debugPrint('DatabaseService: FCM token saved for UID: $uid');
+    } catch (e) {
+      debugPrint('DatabaseService: saveFcmToken error: $e');
+      // Non-fatal — do not block app flow if token save fails.
+    }
+  }
+
+  /// Updates the profile photo URL for the given user.
+  Future<void> updatePhotoUrl(String uid, String photoUrl) async {
+    try {
+      await _db.ref('$_usersNode/$uid').update({'photoUrl': photoUrl});
+      debugPrint('DatabaseService: photoUrl updated for UID: $uid');
+    } catch (e) {
+      debugPrint('DatabaseService: updatePhotoUrl error: $e');
+      throw Exception('Gagal menyimpan URL foto profil.');
     }
   }
 
@@ -189,6 +213,28 @@ class DatabaseService {
       return dataMap.length;
     });
   }
+
+  /// Real-time stream of risk predictions sorted by timestamp descending.
+  Stream<List<RiskPredictionModel>> getRiskPredictionsStream(String uid) {
+    return _db.ref('$_usersNode/$uid/risk_predictions').onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists || snapshot.value == null) return [];
+
+      final Map<dynamic, dynamic> dataMap = snapshot.value as Map<dynamic, dynamic>;
+      final List<RiskPredictionModel> list = [];
+
+      dataMap.forEach((key, value) {
+        if (value is Map) {
+          list.add(RiskPredictionModel.fromJson(value));
+        }
+      });
+
+      // Sort by timestamp descending (newest first)
+      list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return list;
+    });
+  }
+
 
   /// Save sensor data history to users/$uid/sensor_data.
   Future<void> saveSensorDataHistory(String uid, Map<String, dynamic> data) async {

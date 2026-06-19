@@ -335,7 +335,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                             ),
                                             const SizedBox(height: 4),
                                             DropdownButtonFormField<String>(
-                                              value: _gender,
+                                              initialValue: _gender,
                                               style: GoogleFonts.inter(
                                                 fontSize: 15,
                                                 color: AppTheme.textDark,

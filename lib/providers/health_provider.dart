@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/health_record.dart';
 import '../models/activity_log.dart';
+import '../models/risk_prediction.dart';
 import '../repositories/database_repository.dart';
 
 class HealthProvider extends ChangeNotifier {
@@ -9,12 +10,15 @@ class HealthProvider extends ChangeNotifier {
 
   List<HealthRecord> _records = [];
   List<ActivityLog> _logs = [];
+  List<RiskPredictionModel> _predictions = [];
   bool _isLoading = false;
   String? _errorMessage;
   String? _activeUid;
 
   StreamSubscription<List<HealthRecord>>? _historySubscription;
   StreamSubscription<List<ActivityLog>>? _logsSubscription;
+  StreamSubscription<List<RiskPredictionModel>>? _predictionsSubscription;
+
 
   HealthProvider({DatabaseRepository? dbRepository})
       : _dbRepository = dbRepository ?? DatabaseRepository();
@@ -22,8 +26,10 @@ class HealthProvider extends ChangeNotifier {
   // Getters
   List<HealthRecord> get records => _records;
   List<ActivityLog> get logs => _logs;
+  List<RiskPredictionModel> get predictions => _predictions;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
 
   /// Starts listening to real-time streams for the authenticated user.
   void initialize(String uid) {
@@ -50,19 +56,31 @@ class HealthProvider extends ChangeNotifier {
       _logs = data;
       notifyListeners();
     });
+
+    // Subscribe to risk predictions
+    _predictionsSubscription?.cancel();
+    _predictionsSubscription = _dbRepository.getRiskPredictionsStream(uid).listen((data) {
+      _predictions = data;
+      notifyListeners();
+    });
   }
+
 
   /// Clears streams when the user logs out.
   void clear() {
     _activeUid = null;
     _records.clear();
     _logs.clear();
+    _predictions.clear();
     _historySubscription?.cancel();
     _historySubscription = null;
     _logsSubscription?.cancel();
     _logsSubscription = null;
+    _predictionsSubscription?.cancel();
+    _predictionsSubscription = null;
     notifyListeners();
   }
+
 
   void _setLoading(bool value) {
     _isLoading = value;

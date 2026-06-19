@@ -6,18 +6,22 @@ import '../../theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/health_provider.dart';
 import '../../models/health_record.dart';
+import '../../models/risk_prediction.dart';
+import '../dashboard/explainable_ai_screen.dart';
 import 'report_preview_screen.dart';
+
 
 class HistoryEntry {
   final String title;
   final String time;
   final String value;
-  final String type; // 'glucose', 'activity', 'risk'
+  final String type; // 'glucose', 'activity', 'risk_prediction'
   final String status; // 'Normal', 'Tinggi', 'Optimal', 'Bagus', 'Rendah', 'Sedang'
   final Color statusColor;
   final IconData icon;
   final Color iconColor;
   final HealthRecord? record;
+  final RiskPredictionModel? predictionModel;
 
   HistoryEntry({
     required this.title,
@@ -29,6 +33,7 @@ class HistoryEntry {
     required this.icon,
     required this.iconColor,
     this.record,
+    this.predictionModel,
   });
 }
 
@@ -61,8 +66,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  List<HistoryEntry> _getCombinedEntries(List<HealthRecord> dbRecords) {
+  List<HistoryEntry> _getCombinedEntries(BuildContext context, List<HealthRecord> dbRecords) {
     final List<HistoryEntry> list = [];
+    final healthProvider = context.read<HealthProvider>();
     
     // Map DB records
     for (var r in dbRecords) {
@@ -79,7 +85,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ));
     }
 
-    // Add simulated activity and risk entries to make it premium and look complete
+    // Map DB risk predictions
+    for (var p in healthProvider.predictions) {
+      list.add(HistoryEntry(
+        title: 'Analisis Risiko Diabetes AI',
+        time: _formatDate(p.timestamp),
+        value: 'Risiko: ${p.riskPercentage.toStringAsFixed(0)}%',
+        type: 'risk_prediction',
+        status: p.riskLevel,
+        statusColor: p.riskLevel == 'Risiko Rendah'
+            ? const Color(0xFF16A34A)
+            : (p.riskLevel == 'Risiko Sedang' ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)),
+        icon: Icons.psychology_rounded,
+        iconColor: p.riskLevel == 'Risiko Rendah'
+            ? const Color(0xFF16A34A)
+            : (p.riskLevel == 'Risiko Sedang' ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)),
+        predictionModel: p,
+      ));
+    }
+
+    // Add simulated activity entries to make it premium and look complete
     list.add(HistoryEntry(
       title: 'Aktivitas Langkah Harian',
       time: 'Hari ini, 10:00 WIB',
@@ -91,16 +116,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       iconColor: AppTheme.primaryBlue,
     ));
     list.add(HistoryEntry(
-      title: 'Analisis Risiko Diabetes AI',
-      time: 'Kemarin, 16:30 WIB',
-      value: 'Tingkat Risiko: 12%',
-      type: 'risk',
-      status: 'Risiko Rendah',
-      statusColor: const Color(0xFF16A34A),
-      icon: Icons.psychology_rounded,
-      iconColor: AppTheme.primaryBlue,
-    ));
-    list.add(HistoryEntry(
       title: 'Aktivitas Langkah Harian',
       time: '11 Juni, 18:00 WIB',
       value: '5,100 langkah',
@@ -109,16 +124,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       statusColor: const Color(0xFFEF4444),
       icon: Icons.directions_run_rounded,
       iconColor: const Color(0xFFEF4444),
-    ));
-    list.add(HistoryEntry(
-      title: 'Analisis Risiko Diabetes AI',
-      time: '10 Juni, 11:00 WIB',
-      value: 'Tingkat Risiko: 45%',
-      type: 'risk',
-      status: 'Risiko Sedang',
-      statusColor: const Color(0xFFF59E0B),
-      icon: Icons.psychology_rounded,
-      iconColor: const Color(0xFFF59E0B),
     ));
     list.add(HistoryEntry(
       title: 'Aktivitas Langkah Harian',
@@ -138,16 +143,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
     } else if (_selectedFilter == 'Aktivitas') {
       return list.where((e) => e.type == 'activity').toList();
     } else if (_selectedFilter == 'Risiko AI') {
-      return list.where((e) => e.type == 'risk').toList();
+      return list.where((e) => e.type == 'risk_prediction').toList();
     }
     return list;
   }
+
 
   @override
   Widget build(BuildContext context) {
     final healthProvider = context.watch<HealthProvider>();
     final dbRecords = healthProvider.records;
-    final entries = _getCombinedEntries(dbRecords);
+    final entries = _getCombinedEntries(context, dbRecords);
+
 
     return Container(
       decoration: const BoxDecoration(
@@ -253,12 +260,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   averageGlucose: avgGlucose > 0 ? avgGlucose.toStringAsFixed(0) : '0',
                   averageSteps: '8,100',
                   warningCount: warningCount,
-                  historyEntries: provider.records.map((r) => {
-                    'title': 'Gula Darah: ${r.glucoseLevel.toInt()} mg/dL (${r.bmiStatus})',
-                    'time': r.timestamp.isNotEmpty ? r.timestamp.substring(0, 10) : 'Baru saja',
-                    'value': '${r.glucoseLevel.toInt()} mg/dL',
-                    'status': r.glucoseStatus,
-                  }).toList(),
+                  historyEntries: [
+                    ...provider.records.map((r) => {
+                      'title': 'Gula Darah: ${r.glucoseLevel.toInt()} mg/dL (${r.bmiStatus})',
+                      'time': r.timestamp.isNotEmpty ? r.timestamp.substring(0, 10) : 'Baru saja',
+                      'value': '${r.glucoseLevel.toInt()} mg/dL',
+                      'status': r.glucoseStatus,
+                    }),
+                    ...provider.predictions.map((p) => {
+                      'title': 'Analisis Risiko Diabetes AI (${p.riskLevel})',
+                      'time': p.timestamp.isNotEmpty ? p.timestamp.substring(0, 10) : 'Baru saja',
+                      'value': 'Risiko: ${p.riskPercentage.toStringAsFixed(0)}%',
+                      'status': p.riskLevel,
+                    }),
+                  ],
+
                 ),
               ),
             );
@@ -773,7 +789,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: entries.map((entry) {
         final isDbRecord = entry.record != null;
 
-        return Container(
+        return GestureDetector(
+          onTap: () {
+            if (entry.type == 'risk_prediction' && entry.predictionModel != null) {
+              final p = entry.predictionModel!;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ExplainableAiScreen(
+                    risk: p.riskPercentage,
+                    gender: p.gender,
+                    age: p.age,
+                    hypertension: p.hypertension ? 'Ya' : 'Tidak',
+                    heartDisease: p.heartDisease ? 'Ya' : 'Tidak',
+                    smokingHistory: p.smokingHistory,
+                    bmi: p.bmi,
+                    hba1c: p.hba1c,
+                    glucose: p.glucose,
+                  ),
+                ),
+              );
+            }
+          },
+          child: Container(
+
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -841,141 +880,156 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          entry.value,
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: entry.statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            entry.status,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: entry.statusColor,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              entry.value,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textDark,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: entry.statusColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                entry.status,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: entry.statusColor,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                        if (entry.type == 'risk_prediction') ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppTheme.textLight,
+                            size: 20,
+                          ),
+                        ],
                       ],
                     ),
                   ],
                 ),
-                if (isDbRecord) ...[
-                  const Divider(color: AppTheme.borderColor, height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'METRIK DETAIL',
-                              style: GoogleFonts.inter(
-                                fontSize: 8,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textLight,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'TD: ${entry.record!.bloodPressure.isNotEmpty ? entry.record!.bloodPressure : '--'} mmHg  •  DJ: ${entry.record!.heartRate.toInt()} bpm  •  BMI: ${entry.record!.bmi.toStringAsFixed(1)} (${entry.record!.bmiStatus})',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textGrey,
-                              ),
-                            ),
-                            if (entry.record!.notes.isNotEmpty) ...[
-                              const SizedBox(height: 6),
+                  if (isDbRecord) ...[
+                    const Divider(color: AppTheme.borderColor, height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                'Catatan: "${entry.record!.notes}"',
+                                'METRIK DETAIL',
+                                style: GoogleFonts.inter(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textLight,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'TD: ${entry.record!.bloodPressure.isNotEmpty ? entry.record!.bloodPressure : '--'} mmHg  •  DJ: ${entry.record!.heartRate.toInt()} bpm  •  BMI: ${entry.record!.bmi.toStringAsFixed(1)} (${entry.record!.bmiStatus})',
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
-                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w600,
                                   color: AppTheme.textGrey,
                                 ),
                               ),
+                              if (entry.record!.notes.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Catatan: "${entry.record!.notes}"',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                    color: AppTheme.textGrey,
+                                  ),
+                                ),
+                              ],
                             ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => _showHealthRecordDialog(record: entry.record),
+                              icon: const Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryBlue),
+                              tooltip: 'Ubah Data',
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(4),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: Text('Hapus Catatan', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                                    content: Text('Apakah Anda yakin ingin menghapus catatan kesehatan ini?', style: GoogleFonts.inter()),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text('Batal', style: GoogleFonts.inter(color: AppTheme.textGrey, fontWeight: FontWeight.w600)),
+                                      ),
+                                      TextButton(
+                                        onPressed: () async {
+                                          Navigator.pop(context);
+                                          final success = await provider.removeHealthRecord(entry.record!.recordId);
+                                          if (success) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Catatan kesehatan berhasil dihapus!',
+                                                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                                                  ),
+                                                  backgroundColor: const Color(0xFF22C55E),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                        child: Text('Hapus', style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFEF4444)),
+                              tooltip: 'Hapus Data',
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(4),
+                            ),
                           ],
                         ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => _showHealthRecordDialog(record: entry.record),
-                            icon: const Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryBlue),
-                            tooltip: 'Ubah Data',
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(4),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: Text('Hapus Catatan', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                                  content: Text('Apakah Anda yakin ingin menghapus catatan kesehatan ini?', style: GoogleFonts.inter()),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: Text('Batal', style: GoogleFonts.inter(color: AppTheme.textGrey, fontWeight: FontWeight.w600)),
-                                    ),
-                                    TextButton(
-                                      onPressed: () async {
-                                        Navigator.pop(context);
-                                        final success = await provider.removeHealthRecord(entry.record!.recordId);
-                                        if (success) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Catatan kesehatan berhasil dihapus!',
-                                                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                                                ),
-                                                backgroundColor: const Color(0xFF22C55E),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      child: Text('Hapus', style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontWeight: FontWeight.w700)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFEF4444)),
-                            tooltip: 'Hapus Data',
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(4),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );
       }).toList(),
     );
   }
+
 
   void _showHealthRecordDialog({HealthRecord? record}) {
     final isEditing = record != null;

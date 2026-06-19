@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/fcm_service.dart';
 
 class AuthRepository {
   final AuthService _authService;
@@ -49,16 +50,20 @@ class AuthRepository {
     return creds;
   }
 
-  /// Signs in the user and updates their last login timestamp.
+  /// Signs in the user and updates their last login timestamp and FCM token.
   Future<UserCredential> signIn(String email, String password) async {
     final creds = await _authService.signIn(email, password);
     final uid = creds.user?.uid;
 
     if (uid != null) {
       final now = DateTime.now().toIso8601String();
-      await _dbService.updateUserProfile(uid, {
-        'lastLogin': now,
-      });
+      await _dbService.updateUserProfile(uid, {'lastLogin': now});
+
+      // Save current device FCM token
+      final token = await FcmService.instance.getToken();
+      if (token != null) {
+        await _dbService.saveFcmToken(uid, token);
+      }
     }
 
     return creds;
@@ -66,7 +71,7 @@ class AuthRepository {
 
   /// Signs in a user using Google Sign-In.
   /// If the user is new, creates a default user profile in the database.
-  /// If the user is existing, updates their last login timestamp.
+  /// If the user is existing, updates their last login timestamp and FCM token.
   Future<UserCredential> signInWithGoogle() async {
     final creds = await _authService.signInWithGoogle();
     final uid = creds.user?.uid;
@@ -85,13 +90,18 @@ class AuthRepository {
           age: 0,
           createdAt: now,
           lastLogin: now,
+          photoUrl: creds.user?.photoURL ?? '',
         );
         await _dbService.createUserProfile(uid, defaultProfile);
       } else {
         // Update last login for existing Google user
-        await _dbService.updateUserProfile(uid, {
-          'lastLogin': now,
-        });
+        await _dbService.updateUserProfile(uid, {'lastLogin': now});
+      }
+
+      // Save current device FCM token
+      final token = await FcmService.instance.getToken();
+      if (token != null) {
+        await _dbService.saveFcmToken(uid, token);
       }
     }
 

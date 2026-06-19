@@ -34,8 +34,17 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     );
   }
 
-  Future<void> _pickTime(NotificationSettingsModel current) async {
-    final parts = current.reminderTime.split(':');
+  Future<void> _pickTime(NotificationSettingsModel current, String type) async {
+    String currentTimeString = '08:00';
+    if (type == 'daily') {
+      currentTimeString = current.dailyReminderTime;
+    } else if (type == 'medicine') {
+      currentTimeString = current.medicineReminderTime;
+    } else if (type == 'glucose') {
+      currentTimeString = current.glucoseReminderTime;
+    }
+
+    final parts = currentTimeString.split(':');
     final initialHour = int.tryParse(parts[0]) ?? 8;
     final initialMinute = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
 
@@ -57,9 +66,90 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     if (picked != null && mounted) {
       final timeString =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      await _saveSettings(current.copyWith(reminderTime: timeString));
+      
+      NotificationSettingsModel updated;
+      if (type == 'daily') {
+        updated = current.copyWith(dailyReminderTime: timeString);
+      } else if (type == 'medicine') {
+        updated = current.copyWith(medicineReminderTime: timeString);
+      } else {
+        updated = current.copyWith(glucoseReminderTime: timeString);
+      }
+      await _saveSettings(updated);
     }
   }
+
+  Widget _buildTimePickerRow({
+    required String title,
+    required String subtitle,
+    required String timeString,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: _isSaving ? null : onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.access_time_rounded,
+                  color: AppTheme.primaryBlue, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppTheme.textGrey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
+              ),
+              child: Text(
+                timeString,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.primaryBlue,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppTheme.textLight, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -207,71 +297,51 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 _buildSectionTitle('Waktu Reminder'),
                 const SizedBox(height: 12),
                 _buildSettingsCard([
-                  InkWell(
-                    onTap: _isSaving ? null : () => _pickTime(settings),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryBlue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.access_time_rounded,
-                                color: AppTheme.primaryBlue, size: 20),
+                  if (settings.dailyReminder) ...[
+                    _buildTimePickerRow(
+                      title: 'Waktu Pengingat Harian',
+                      subtitle: 'Notifikasi harian akan dikirim pukul:',
+                      timeString: settings.dailyReminderTime,
+                      onTap: () => _pickTime(settings, 'daily'),
+                    ),
+                    if (settings.medicineReminder || settings.glucoseReminder)
+                      const Divider(height: 1, indent: 68, color: AppTheme.borderColor),
+                  ],
+                  if (settings.medicineReminder) ...[
+                    _buildTimePickerRow(
+                      title: 'Waktu Pengingat Obat',
+                      subtitle: 'Pengingat obat akan dikirim pukul:',
+                      timeString: settings.medicineReminderTime,
+                      onTap: () => _pickTime(settings, 'medicine'),
+                    ),
+                    if (settings.glucoseReminder)
+                      const Divider(height: 1, indent: 68, color: AppTheme.borderColor),
+                  ],
+                  if (settings.glucoseReminder) ...[
+                    _buildTimePickerRow(
+                      title: 'Waktu Pengingat Gula Darah',
+                      subtitle: 'Pengingat gula darah akan dikirim pukul:',
+                      timeString: settings.glucoseReminderTime,
+                      onTap: () => _pickTime(settings, 'glucose'),
+                    ),
+                  ],
+                  if (!settings.dailyReminder && !settings.medicineReminder && !settings.glucoseReminder)
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Center(
+                        child: Text(
+                          'Aktifkan salah satu pengingat di atas untuk mengatur waktu.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: AppTheme.textGrey,
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Jam Reminder',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Notifikasi akan dikirim pada pukul:',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: AppTheme.textGrey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryBlue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              settings.reminderTime,
-                              style: GoogleFonts.inter(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primaryBlue,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chevron_right_rounded,
-                              color: AppTheme.textLight, size: 20),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
                 ]),
+
                 const SizedBox(height: 16),
 
                 // Info box
@@ -391,7 +461,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Switch(
             value: value,
             onChanged: _isSaving ? null : onChanged,
-            activeColor: AppTheme.primaryBlue,
+            activeThumbColor: AppTheme.primaryBlue,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ],

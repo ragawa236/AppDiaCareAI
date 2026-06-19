@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/database_repository.dart';
+import '../services/storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final DatabaseRepository _dbRepository;
+  final StorageService _storageService;
 
   User? _firebaseUser;
   UserModel? _userProfile;
   bool _isLoading = false;
+  bool _isUploadingPhoto = false;
   String? _errorMessage;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<UserModel?>? _profileSubscription;
@@ -19,8 +23,10 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider({
     AuthRepository? authRepository,
     DatabaseRepository? dbRepository,
+    StorageService? storageService,
   })  : _authRepository = authRepository ?? AuthRepository(),
-        _dbRepository = dbRepository ?? DatabaseRepository() {
+        _dbRepository = dbRepository ?? DatabaseRepository(),
+        _storageService = storageService ?? StorageService() {
     _init();
   }
 
@@ -29,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
   UserModel? get userProfile => _userProfile;
   bool get isAuthenticated => _firebaseUser != null;
   bool get isLoading => _isLoading;
+  bool get isUploadingPhoto => _isUploadingPhoto;
   String? get errorMessage => _errorMessage;
 
   void _init() {
@@ -233,6 +240,48 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Uploads a new profile photo to Firebase Storage and saves the URL to RTDB.
+  ///
+  /// Returns the download URL on success, or null on failure.
+  Future<String?> uploadAndSavePhoto(
+    XFile imageFile, {
+    void Function(double)? onProgress,
+  }) async {
+    final uid = _firebaseUser?.uid;
+    if (uid == null) return null;
+
+    _isUploadingPhoto = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final photoUrl = await _storageService.uploadProfilePhoto(
+        uid: uid,
+        imageFile: imageFile,
+        onProgress: onProgress,
+      );
+
+      // Persist URL to RTDB
+      await _dbRepository.updatePhotoUrl(uid, photoUrl);
+
+      // Log the action
+      await _dbRepository.logActivity(
+        uid: uid,
+        action: 'Ubah Foto Profil',
+        description: 'Pengguna mengunggah foto profil baru.',
+      );
+
+      _isUploadingPhoto = false;
+      notifyListeners();
+      return photoUrl;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _isUploadingPhoto = false;
+      notifyListeners();
+      return null;
     }
   }
 

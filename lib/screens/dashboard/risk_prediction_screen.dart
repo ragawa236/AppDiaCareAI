@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/privacy_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../repositories/database_repository.dart';
+import '../../services/fcm_service.dart';
 import 'explainable_ai_screen.dart';
 
 class RiskPredictionScreen extends StatefulWidget {
@@ -244,10 +246,21 @@ class _RiskPredictionScreenState extends State<RiskPredictionScreen> {
 
     try {
       await DatabaseRepository().saveRiskPrediction(uid, data);
+      
+      // Trigger notification if enabled
+      final notifProvider = context.read<NotificationProvider>();
+      if (notifProvider.settings?.riskPredictionNotification ?? true) {
+        await FcmService.instance.showLocalNotification(
+          id: 4,
+          title: 'Analisis Risiko AI Selesai 🧠',
+          body: 'Tingkat risiko diabetes Anda: $riskLevel (${riskPercentage.toStringAsFixed(0)}%).',
+        );
+      }
     } catch (e) {
       debugPrint('RiskPrediction: Failed to save history: $e');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -389,7 +402,7 @@ class _RiskPredictionScreenState extends State<RiskPredictionScreen> {
                     // Gender Dropdown
                     _buildFieldLabel('Jenis Kelamin (Gender)'),
                     DropdownButtonFormField<String>(
-                      value: _gender,
+                      initialValue: _gender,
                       decoration: const InputDecoration(
                         hintText: 'Pilih jenis kelamin',
                       ),
@@ -558,7 +571,7 @@ class _RiskPredictionScreenState extends State<RiskPredictionScreen> {
                     // Smoking History
                     _buildFieldLabel('Riwayat Merokok (Smoking History)'),
                     DropdownButtonFormField<String>(
-                      value: _smokingHistory,
+                      initialValue: _smokingHistory,
                       decoration: const InputDecoration(
                         hintText: 'Pilih riwayat merokok',
                       ),
@@ -789,7 +802,7 @@ class _RiskPredictionScreenState extends State<RiskPredictionScreen> {
                     icon: Icons.favorite_rounded,
                     iconColor: const Color(0xFFEF4444),
                     label: 'Skor Metabolik',
-                    value: '${metabolic.toStringAsFixed(0)}',
+                    value: metabolic.toStringAsFixed(0),
                     suffix: '/100',
                     desc: 'Kesehatan seluler Anda',
                   ),

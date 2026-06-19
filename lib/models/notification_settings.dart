@@ -5,7 +5,9 @@ class NotificationSettingsModel {
   final bool medicineReminder;
   final bool glucoseReminder;
   final bool riskPredictionNotification;
-  final String reminderTime;
+  final String dailyReminderTime;
+  final String medicineReminderTime;
+  final String glucoseReminderTime;
   final DateTime updatedAt;
 
   NotificationSettingsModel({
@@ -13,7 +15,9 @@ class NotificationSettingsModel {
     required this.medicineReminder,
     required this.glucoseReminder,
     required this.riskPredictionNotification,
-    required this.reminderTime,
+    required this.dailyReminderTime,
+    required this.medicineReminderTime,
+    required this.glucoseReminderTime,
     required this.updatedAt,
   });
 
@@ -23,7 +27,9 @@ class NotificationSettingsModel {
       medicineReminder: json['medicineReminder'] as bool? ?? false,
       glucoseReminder: json['glucoseReminder'] as bool? ?? false,
       riskPredictionNotification: json['riskPredictionNotification'] as bool? ?? false,
-      reminderTime: json['reminderTime'] as String? ?? '08:00',
+      dailyReminderTime: json['dailyReminderTime'] as String? ?? json['reminderTime'] as String? ?? '08:00',
+      medicineReminderTime: json['medicineReminderTime'] as String? ?? '12:00',
+      glucoseReminderTime: json['glucoseReminderTime'] as String? ?? '18:00',
       updatedAt: (json['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -34,7 +40,9 @@ class NotificationSettingsModel {
       'medicineReminder': medicineReminder,
       'glucoseReminder': glucoseReminder,
       'riskPredictionNotification': riskPredictionNotification,
-      'reminderTime': reminderTime,
+      'dailyReminderTime': dailyReminderTime,
+      'medicineReminderTime': medicineReminderTime,
+      'glucoseReminderTime': glucoseReminderTime,
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
   }
@@ -45,7 +53,9 @@ class NotificationSettingsModel {
       medicineReminder: false,
       glucoseReminder: false,
       riskPredictionNotification: true,
-      reminderTime: '08:00',
+      dailyReminderTime: '08:00',
+      medicineReminderTime: '12:00',
+      glucoseReminderTime: '18:00',
       updatedAt: DateTime.now(),
     );
   }
@@ -55,7 +65,9 @@ class NotificationSettingsModel {
     bool? medicineReminder,
     bool? glucoseReminder,
     bool? riskPredictionNotification,
-    String? reminderTime,
+    String? dailyReminderTime,
+    String? medicineReminderTime,
+    String? glucoseReminderTime,
     DateTime? updatedAt,
   }) {
     return NotificationSettingsModel(
@@ -63,8 +75,11 @@ class NotificationSettingsModel {
       medicineReminder: medicineReminder ?? this.medicineReminder,
       glucoseReminder: glucoseReminder ?? this.glucoseReminder,
       riskPredictionNotification: riskPredictionNotification ?? this.riskPredictionNotification,
-      reminderTime: reminderTime ?? this.reminderTime,
+      dailyReminderTime: dailyReminderTime ?? this.dailyReminderTime,
+      medicineReminderTime: medicineReminderTime ?? this.medicineReminderTime,
+      glucoseReminderTime: glucoseReminderTime ?? this.glucoseReminderTime,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }
+
